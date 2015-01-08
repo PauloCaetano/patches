@@ -1,0 +1,120 @@
+diff -ur openssl-1.0.2-stable-SNAP-20150106/config openssl-1.0.2-stable-SNAP-20150106-work/config
+--- openssl-1.0.2-stable-SNAP-20150106/config	2014-06-10 23:00:03.000000000 +0100
++++ openssl-1.0.2-stable-SNAP-20150106-work/config	2015-01-06 10:33:45.129018700 +0000
+@@ -344,7 +344,8 @@
+ 	echo "mips-sony-newsos4"; exit 0;
+ 	;;
+ 
+-    MINGW*)
++    # MSYS identifies as "MINGW32_*"; MSYS2 identifies as "MSYS_*"
++    MSYS* | MINGW*)
+ 	echo "${MACHINE}-whatever-mingw"; exit 0;
+ 	;;
+     CYGWIN*)
+diff -ur openssl-1.0.2-stable-SNAP-20150106/Configure openssl-1.0.2-stable-SNAP-20150106-work/Configure
+--- openssl-1.0.2-stable-SNAP-20150106/Configure	2015-01-05 14:00:47.000000000 +0000
++++ openssl-1.0.2-stable-SNAP-20150106-work/Configure	2015-01-06 10:35:47.851038000 +0000
+@@ -550,6 +550,7 @@
+ 
+ # MinGW
+ "mingw", "gcc:-mno-cygwin -DL_ENDIAN -DWIN32_LEAN_AND_MEAN -fomit-frame-pointer -O3 -march=i486 -Wall::-D_MT:MINGW32:-lws2_32 -lgdi32 -lcrypt32:BN_LLONG ${x86_gcc_des} ${x86_gcc_opts} EXPORT_VAR_AS_FN:${x86_asm}:coff:win32:cygwin-shared:-D_WINDLL -DOPENSSL_USE_APPLINK:-mno-cygwin:.dll.a",
++"debug-mingw", "gcc:-DL_ENDIAN -DWIN32_LEAN_AND_MEAN -march=i486 -Wall -DBN_DEBUG -DREF_CHECK -DCONF_DEBUG -DBN_CTX_DEBUG -DCRYPTO_MDEBUG -g::-D_MT:MINGW32:-lws2_32 -lgdi32 -lcrypt32:BN_LLONG ${x86_gcc_des} ${x86_gcc_opts} EXPORT_VAR_AS_FN:${x86_asm}:coff:win32:cygwin-shared:-D_WINDLL -DOPENSSL_USE_APPLINK::.dll.a",
+ # As for OPENSSL_USE_APPLINK. Applink makes it possible to use .dll
+ # compiled with one compiler with application compiled with another
+ # compiler. It's possible to engage Applink support in mingw64 build,
+@@ -1144,7 +1145,7 @@
+ 
+ my $IsMK1MF=scalar grep /^$target$/,@MK1MF_Builds;
+ 
+-$exe_ext=".exe" if ($target eq "Cygwin" || $target eq "DJGPP" || $target =~ /^mingw/);
++$exe_ext=".exe" if ($target eq "Cygwin" || $target eq "DJGPP" || $target =~ /mingw/);
+ $exe_ext=".nlm" if ($target =~ /netware/);
+ $exe_ext=".pm"  if ($target =~ /vos/);
+ $openssldir="/usr/local/ssl" if ($openssldir eq "" and $prefix eq "");
+diff -ur openssl-1.0.2-stable-SNAP-20150106/Makefile.org openssl-1.0.2-stable-SNAP-20150106-work/Makefile.org
+--- openssl-1.0.2-stable-SNAP-20150106/Makefile.org	2014-09-22 00:00:11.000000000 +0100
++++ openssl-1.0.2-stable-SNAP-20150106-work/Makefile.org	2015-01-06 10:36:53.560796300 +0000
+@@ -582,7 +582,7 @@
+ 					chmod 555 $(INSTALL_PREFIX)$(INSTALLTOP)/$(LIBDIR)/$$i.new; \
+ 					mv -f $(INSTALL_PREFIX)$(INSTALLTOP)/$(LIBDIR)/$$i.new $(INSTALL_PREFIX)$(INSTALLTOP)/$(LIBDIR)/$$i; \
+ 				fi ); \
+-				if expr $(PLATFORM) : 'mingw' > /dev/null; then \
++				if expr $(PLATFORM) : '.*mingw' > /dev/null; then \
+ 				(	case $$i in \
+ 						*crypto*) i=libeay32.dll;; \
+ 						*ssl*)    i=ssleay32.dll;; \
+@@ -614,7 +614,7 @@
+ install_html_docs:
+ 	here="`pwd`"; \
+ 	filecase=; \
+-	case "$(PLATFORM)" in DJGPP|Cygwin*|mingw*|darwin*-*-cc) \
++	case "$(PLATFORM)" in DJGPP|Cygwin*|*mingw*|darwin*-*-cc) \
+ 		filecase=-i; \
+ 	esac; \
+ 	for subdir in apps crypto ssl; do \
+@@ -645,7 +645,7 @@
+ 	@pod2man="`cd ./util; ./pod2mantest $(PERL)`"; \
+ 	here="`pwd`"; \
+ 	filecase=; \
+-	case "$(PLATFORM)" in DJGPP|Cygwin*|mingw*|darwin*-*-cc) \
++	case "$(PLATFORM)" in DJGPP|Cygwin*|*mingw*|darwin*-*-cc) \
+ 		filecase=-i; \
+ 	esac; \
+ 	set -e; for i in doc/apps/*.pod; do \
+diff -ur openssl-1.0.2-stable-SNAP-20150106/Makefile.shared openssl-1.0.2-stable-SNAP-20150106-work/Makefile.shared
+--- openssl-1.0.2-stable-SNAP-20150106/Makefile.shared	2013-01-11 16:09:17.000000000 +0000
++++ openssl-1.0.2-stable-SNAP-20150106-work/Makefile.shared	2015-01-06 10:37:57.722466200 +0000
+@@ -261,27 +261,32 @@
+ 	SHLIB=cyg$(LIBNAME); \
+ 	base=-Wl,--enable-auto-image-base; \
+ 	deffile=; \
+-	if expr $(PLATFORM) : 'mingw' > /dev/null; then \
++	symbol_flag=-Wl,-s,-Bsymbolic; \
++	if expr $(PLATFORM) : '.*mingw' > /dev/null; then \
+ 		SHLIB=$(LIBNAME)eay32; base=; \
+ 		if test -f $(LIBNAME)eay32.def; then \
+ 			deffile=$(LIBNAME)eay32.def; \
+ 		fi; \
+ 	fi; \
++	if expr $(PLATFORM) : 'debug-mingw' > /dev/null; then \
++		symbol_flag=-Wl,-Bsymbolic; \
++	fi; \
+ 	SHLIB_SUFFIX=.dll; \
+ 	LIBVERSION="$(LIBVERSION)"; \
+ 	SHLIB_SOVER=${LIBVERSION:+"-$(LIBVERSION)"}; \
+ 	ALLSYMSFLAGS='-Wl,--whole-archive'; \
+ 	NOALLSYMSFLAGS='-Wl,--no-whole-archive'; \
+-	SHAREDFLAGS="$(CFLAGS) $(SHARED_LDFLAGS) -shared $$base $$deffile -Wl,-s,-Bsymbolic"; \
++	SHAREDFLAGS="$(CFLAGS) $(SHARED_LDFLAGS) -shared $$base $$deffile $$symbol_flag"; \
+ 	$(LINK_SO_O)
+ #for mingw target if def-file is in use dll-name should match library-name
+ link_a.cygwin:
+ 	@ $(CALC_VERSIONS); \
+ 	INHIBIT_SYMLINKS=yes; \
+ 	SHLIB=cyg$(LIBNAME); SHLIB_SOVER=-$(LIBVERSION); SHLIB_SUFFIX=.dll; \
++	symbol_flag=-Wl,-s,-Bsymbolic; \
+ 	dll_name=$$SHLIB$$SHLIB_SOVER$$SHLIB_SUFFIX; extras=; \
+ 	base=-Wl,--enable-auto-image-base; \
+-	if expr $(PLATFORM) : 'mingw' > /dev/null; then \
++	if expr $(PLATFORM) : '.*mingw' > /dev/null; then \
+ 		case $(LIBNAME) in \
+ 			crypto) SHLIB=libeay;; \
+ 			ssl) SHLIB=ssleay;; \
+@@ -291,13 +296,16 @@
+ 		$(PERL) util/mkdef.pl 32 $$SHLIB > $$extras; \
+ 		base=; [ $(LIBNAME) = "crypto" ] && base=-Wl,--image-base,0x63000000; \
+ 	fi; \
++	if expr $(PLATFORM) : 'debug-mingw' > /dev/null; then \
++		symbol_flag=-Wl,-Bsymbolic; \
++	fi; \
+ 	dll_name=$$SHLIB$$SHLIB_SOVER$$SHLIB_SUFFIX; \
+ 	$(PERL) util/mkrc.pl $$dll_name | \
+ 		$(CROSS_COMPILE)windres -o rc.o; \
+ 	extras="$$extras rc.o"; \
+ 	ALLSYMSFLAGS='-Wl,--whole-archive'; \
+ 	NOALLSYMSFLAGS='-Wl,--no-whole-archive'; \
+-	SHAREDFLAGS="$(CFLAGS) $(SHARED_LDFLAGS) -shared $$base -Wl,-s,-Bsymbolic -Wl,--out-implib,lib$(LIBNAME).dll.a $$extras"; \
++	SHAREDFLAGS="$(CFLAGS) $(SHARED_LDFLAGS) -shared $$base $$symbol_flag -Wl,--out-implib,lib$(LIBNAME).dll.a $$extras"; \
+ 	[ -f apps/$$dll_name ] && rm apps/$$dll_name; \
+ 	[ -f test/$$dll_name ] && rm test/$$dll_name; \
+ 	$(LINK_SO_A) || exit 1; \
